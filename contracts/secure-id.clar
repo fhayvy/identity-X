@@ -1,5 +1,12 @@
 ;; Decentralized Social Login Contract
 
+;; Define error codes
+(define-constant ERR-USER-EXISTS (err u100))
+(define-constant ERR-USER-NOT-FOUND (err u101))
+(define-constant ERR-INVALID-USERNAME (err u102))
+(define-constant ERR-INVALID-EMAIL (err u103))
+(define-constant ERR-INVALID-IMAGE-URL (err u104))
+
 ;; Define the data map for storing user information
 (define-map users principal
   {
@@ -50,24 +57,19 @@
       (safe-username (as-max-len? username u50))
       (safe-email (as-max-len? email u100))
     )
-    (if (and 
-          (is-some safe-username)
-          (is-some safe-email)
-          (validate-username (unwrap-panic safe-username))
-          (validate-email (unwrap-panic safe-email)))
-      (if (is-none (map-get? users caller))
-        (begin
-          (map-set users caller {
-            username: (unwrap-panic safe-username), 
-            email: (unwrap-panic safe-email), 
-            profile-image: none
-          })
-          (var-set user-count (+ (var-get user-count) u1))
-          (ok true)
-        )
-        (err u0)) ;; User already exists
-      (err u3) ;; Invalid username or email
-    )
+    (asserts! (is-none (map-get? users caller)) ERR-USER-EXISTS)
+    (asserts! (is-some safe-username) ERR-INVALID-USERNAME)
+    (asserts! (is-some safe-email) ERR-INVALID-EMAIL)
+    (asserts! (validate-username (unwrap-panic safe-username)) ERR-INVALID-USERNAME)
+    (asserts! (validate-email (unwrap-panic safe-email)) ERR-INVALID-EMAIL)
+    
+    (map-set users caller {
+      username: (unwrap-panic safe-username), 
+      email: (unwrap-panic safe-email), 
+      profile-image: none
+    })
+    (var-set user-count (+ (var-get user-count) u1))
+    (ok true)
   )
 )
 
@@ -79,21 +81,16 @@
       (safe-username (as-max-len? new-username u50))
       (safe-email (as-max-len? new-email u100))
     )
-    (if (and 
-          (is-some safe-username)
-          (is-some safe-email)
-          (validate-username (unwrap-panic safe-username))
-          (validate-email (unwrap-panic safe-email)))
-      (if (is-some (map-get? users caller))
-        (begin
-          (map-set users caller 
-            (merge (unwrap-panic (map-get? users caller))
-                   {username: (unwrap-panic safe-username), email: (unwrap-panic safe-email)}))
-          (ok true)
-        )
-        (err u1)) ;; User does not exist
-      (err u3) ;; Invalid username or email
-    )
+    (asserts! (is-some (map-get? users caller)) ERR-USER-NOT-FOUND)
+    (asserts! (is-some safe-username) ERR-INVALID-USERNAME)
+    (asserts! (is-some safe-email) ERR-INVALID-EMAIL)
+    (asserts! (validate-username (unwrap-panic safe-username)) ERR-INVALID-USERNAME)
+    (asserts! (validate-email (unwrap-panic safe-email)) ERR-INVALID-EMAIL)
+    
+    (map-set users caller 
+      (merge (unwrap-panic (map-get? users caller))
+             {username: (unwrap-panic safe-username), email: (unwrap-panic safe-email)}))
+    (ok true)
   )
 )
 
@@ -104,17 +101,13 @@
       (caller tx-sender)
       (safe-url (as-max-len? image-url u256))
     )
-    (match safe-url
-      url (if (is-some (map-get? users caller))
-          (begin
-            (map-set users caller 
-              (merge (unwrap-panic (map-get? users caller))
-                     {profile-image: (some url)}))
-            (ok true)
-          )
-          (err u2)) ;; User does not exist
-      (err u4) ;; Invalid URL
-    )
+    (asserts! (is-some (map-get? users caller)) ERR-USER-NOT-FOUND)
+    (asserts! (is-some safe-url) ERR-INVALID-IMAGE-URL)
+    
+    (map-set users caller 
+      (merge (unwrap-panic (map-get? users caller))
+             {profile-image: safe-url}))
+    (ok true)
   )
 )
 
